@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 using System.IO;
+using System.Diagnostics;
 using UnrealBuildTool;
 
 public class UE_AssimpLibrary : ModuleRules
@@ -21,10 +22,53 @@ public class UE_AssimpLibrary : ModuleRules
 		return "";
 	}
 	
+  public void BuildAssimpLibrary()
+  {
+		if(Target.Platform == UnrealTargetPlatform.Linux) {
+      ProcessStartInfo startInfo = new ProcessStartInfo();
+      startInfo.FileName = @"/usr/bin/cmake";
+      startInfo.Arguments = @"-G Ninja CMakeLists.txt -DLIBRARY_SUFFIX:STRING=";
+      startInfo.UseShellExecute = false;
+      startInfo.RedirectStandardOutput = true;
+      startInfo.RedirectStandardError = true;
+      startInfo.WorkingDirectory = Path.GetFullPath(Path.Combine(ModuleDirectory, "assimp"));
+
+      using (Process process = Process.Start(startInfo)) {
+        process.WaitForExit();
+
+        System.Console.Write("Output:");
+        using (StreamReader reader = process.StandardOutput)
+        {
+          string result = reader.ReadToEnd();
+          System.Console.Write(result);
+        }
+      }
+
+      startInfo = new ProcessStartInfo();
+      startInfo.FileName = @"/usr/bin/cmake";
+      startInfo.Arguments = @"--build .";
+      startInfo.UseShellExecute = false;
+      startInfo.RedirectStandardOutput = true;
+      startInfo.RedirectStandardError = true;
+      startInfo.WorkingDirectory = Path.GetFullPath(Path.Combine(ModuleDirectory, "assimp"));
+
+      using (Process process = Process.Start(startInfo)) {
+        process.WaitForExit();
+
+        using (StreamReader reader = process.StandardOutput)
+        {
+          string result = reader.ReadToEnd();
+          System.Console.Write(result);
+        }
+      }
+    }
+  }
+
 	public UE_AssimpLibrary(ReadOnlyTargetRules Target) : base(Target)
 	{
 		Type = ModuleType.External;
 
+    BuildAssimpLibrary();
 		string BinaryFolder = BinFolder(Target);
 		PublicIncludePaths.Add(Path.Combine(ModuleDirectory,"assimp" , "include"));
 		if (Target.Platform == UnrealTargetPlatform.Win64)
