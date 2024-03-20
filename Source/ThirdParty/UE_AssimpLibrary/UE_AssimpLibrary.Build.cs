@@ -97,16 +97,15 @@ public class UE_AssimpLibrary : ModuleRules
 			// Add the import library
 			PublicAdditionalLibraries.Add(Path.Combine(ModuleDirectory,"assimp" ,"bin", "libassimp.dylib"));
 
-			//RuntimeDependencies.Add(Path.Combine(ModuleDirectory,"assimp" , "bin","Release","assimp.dll"));
+      // Ensure that the DLL is staged along with the executable
+      RuntimeDependencies.Add(Path.Combine(ModuleDirectory,"assimp", "bin", "libassimp.5.dylib"));
+      AdjustSymlinks("dylib");
 
-			// Delay-load the DLL, so we can load it from the right place first
-			// PublicDelayLoadDLLs.Add(Path.Combine(ModuleDirectory,"assimp" , "bin","Release","assimp.dll"));
+      Directory.CreateDirectory(BinaryFolder);
+      string AssimpDylib = Path.Combine(ModuleDirectory, "assimp", "bin", "libassimp.dylib");
+      string BinPath =Path.Combine(ModuleDirectory, BinaryFolder, "libassimp.dylib");
 
-			Directory.CreateDirectory(BinaryFolder);
-			string AssimpDylib = Path.Combine(ModuleDirectory, "assimp", "bin", "libassimp.dylib");
-			string BinPath =Path.Combine(ModuleDirectory, BinaryFolder, "libassimp.dylib");
-			
-		 CopyFile(AssimpDylib,BinPath);
+     CopyFile(AssimpDylib,BinPath);
 			  // Ensure that the DLL is staged along with the executable
 		//	RuntimeDependencies.Add("$(PluginDir)/Binaries/ThirdParty/UE_AssimpLibrary/Win64/ExampleLibrary.dll");
         }
@@ -118,6 +117,10 @@ public class UE_AssimpLibrary : ModuleRules
         {
 			// Add the import library
 			PublicAdditionalLibraries.Add(Path.Combine(ModuleDirectory,"assimp" ,"bin", "libassimp.so"));
+
+      // Ensure that the DLL is staged along with the executable
+      RuntimeDependencies.Add(Path.Combine(ModuleDirectory, "assimp", "bin", "libassimp.so.5"));
+      AdjustSymlinks("so.5*");
 
 			Directory.CreateDirectory(BinaryFolder);
 			string AssimpSo = Path.Combine(ModuleDirectory, "assimp", "bin", "libassimp.so");
@@ -146,5 +149,23 @@ public class UE_AssimpLibrary : ModuleRules
 		}
 	}
 
-	
+  // Unfortunately we need to convert symlinks to actual copies because Unreal doesn't follow symlinks
+  // when packaging a game which results in errors like "Size mismatch ...".
+  public void AdjustSymlinks(string ext)
+  {
+      var libassimpBinFolder = Path.Combine(ModuleDirectory, "assimp", "bin");
+      var libassimpFiles = Directory.GetFiles(libassimpBinFolder, "libassimp*." + ext);
+      foreach (var filePath in libassimpFiles)
+      {
+        var fileInfo = Directory.ResolveLinkTarget(filePath, true);
+        if (fileInfo == null) {
+          continue;
+        }
+
+        // This is a symlink; convert to an actual copy of the original file
+        string fileName = filePath.Substring(libassimpBinFolder.Length + 1);
+        File.Delete(filePath);
+        File.Copy(fileInfo.ToString(), filePath, true);
+      }
+  }
 }
