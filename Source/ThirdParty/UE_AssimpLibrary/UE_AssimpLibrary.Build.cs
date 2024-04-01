@@ -22,80 +22,66 @@ public class UE_AssimpLibrary : ModuleRules
 		return "";
 	}
 	
-  public void BuildAssimpLibrary()
+  private void InvokeCMake(string args)
   {
-		if(Target.Platform == UnrealTargetPlatform.Linux) {
-      ProcessStartInfo startInfo = new ProcessStartInfo();
-      startInfo.FileName = @"/usr/bin/cmake";
-      startInfo.Arguments = @"-G Ninja CMakeLists.txt -DLIBRARY_SUFFIX:STRING=";
-      startInfo.UseShellExecute = false;
-      startInfo.RedirectStandardOutput = true;
-      startInfo.RedirectStandardError = true;
-      startInfo.WorkingDirectory = Path.GetFullPath(Path.Combine(ModuleDirectory, "assimp"));
-
-      using (Process process = Process.Start(startInfo)) {
-        process.WaitForExit();
-
-        System.Console.Write("Output:");
-        using (StreamReader reader = process.StandardOutput)
-        {
-          string result = reader.ReadToEnd();
-          System.Console.Write(result);
-        }
+    var cmakeExe = System.Environment.GetEnvironmentVariable("CMAKE_EXE_PATH");
+    if (cmakeExe == null) {
+      if(Target.Platform == UnrealTargetPlatform.Win64) {
+        cmakeExe = @"C:\\Program Files\\CMake\\bin\\cmake.exe";
       }
-
-      startInfo = new ProcessStartInfo();
-      startInfo.FileName = @"/usr/bin/cmake";
-      startInfo.Arguments = @"--build .";
-      startInfo.UseShellExecute = false;
-      startInfo.RedirectStandardOutput = true;
-      startInfo.RedirectStandardError = true;
-      startInfo.WorkingDirectory = Path.GetFullPath(Path.Combine(ModuleDirectory, "assimp"));
-
-      using (Process process = Process.Start(startInfo)) {
-        process.WaitForExit();
-
-        using (StreamReader reader = process.StandardOutput)
-        {
-          string result = reader.ReadToEnd();
-          System.Console.Write(result);
-        }
+      else {
+        cmakeExe = @"/usr/bin/cmake";
       }
+    }
+
+    ProcessStartInfo startInfo = new ProcessStartInfo();
+    startInfo.FileName = cmakeExe;
+    startInfo.Arguments = args;
+    startInfo.UseShellExecute = false;
+    startInfo.RedirectStandardOutput = false;
+    startInfo.RedirectStandardError = false;
+    startInfo.WorkingDirectory = Path.GetFullPath(Path.Combine(ModuleDirectory, "assimp"));
+
+    using (Process process = Process.Start(startInfo)) {
+      process.WaitForExit();
     }
   }
 
+  public void BuildAssimpLibrary()
+  {
+    System.Console.Write("Configuring...");
+    InvokeCMake(@"-G Ninja -DCMAKE_BUILD_TYPE=Release CMakeLists.txt -DLIBRARY_SUFFIX:STRING=");
+
+    System.Console.Write("Building...");
+    InvokeCMake(@"--build .");
+  }
+
 	public UE_AssimpLibrary(ReadOnlyTargetRules Target) : base(Target)
-	{
-		Type = ModuleType.External;
+  {
+    Type = ModuleType.External;
 
     BuildAssimpLibrary();
-		string BinaryFolder = BinFolder(Target);
-		PublicIncludePaths.Add(Path.Combine(ModuleDirectory,"assimp" , "include"));
-		if (Target.Platform == UnrealTargetPlatform.Win64)
-		{
-			// Add the import library
-			PublicAdditionalLibraries.Add(Path.Combine(ModuleDirectory,"assimp" ,"lib", "Release", "assimp.lib"));
+    string BinaryFolder = BinFolder(Target);
+    PublicIncludePaths.Add(Path.Combine(ModuleDirectory,"assimp" , "include"));
+    if (Target.Platform == UnrealTargetPlatform.Win64)
+    {
+      // Add the import library
+      PublicAdditionalLibraries.Add(Path.Combine(ModuleDirectory,"assimp" ,"lib", "assimp.lib"));
+      //RuntimeDependencies.Add(Path.Combine(ModuleDirectory,"assimp" , "bin","Release","assimp.dll"));
 
+      // Delay-load the DLL, so we can load it from the right place first
+      PublicDelayLoadDLLs.Add(Path.Combine(ModuleDirectory,"assimp" , "bin", "assimp.dll"));
 
-			//RuntimeDependencies.Add(Path.Combine(ModuleDirectory,"assimp" , "bin","Release","assimp.dll"));
+      Directory.CreateDirectory(BinaryFolder);
+      string AssimpDll = Path.Combine(ModuleDirectory, "assimp", "bin", "assimp.dll");
+      string BinPath =Path.Combine(ModuleDirectory, BinaryFolder, "assimp.dll");
 
-			
-			// Delay-load the DLL, so we can load it from the right place first
-			PublicDelayLoadDLLs.Add(Path.Combine(ModuleDirectory,"assimp" , "bin","Release","assimp.dll"));
-
-			
-			Directory.CreateDirectory(BinaryFolder);
-			string  AssimpDll = Path.Combine(ModuleDirectory, "assimp", "bin", "Release", "assimp.dll");
-			string BinPath =Path.Combine(ModuleDirectory, BinaryFolder, "assimp.dll");
-			
-		 CopyFile(AssimpDll,BinPath);
-			  // Ensure that the DLL is staged along with the executable
-		//	RuntimeDependencies.Add("$(PluginDir)/Binaries/ThirdParty/UE_AssimpLibrary/Win64/ExampleLibrary.dll");
-        }
-        else if (Target.Platform == UnrealTargetPlatform.Mac)
-        {
-			// Add the import library
-			PublicAdditionalLibraries.Add(Path.Combine(ModuleDirectory,"assimp" ,"bin", "libassimp.dylib"));
+      CopyFile(AssimpDll, BinPath);
+    }
+    else if (Target.Platform == UnrealTargetPlatform.Mac)
+    {
+      // Add the import library
+      PublicAdditionalLibraries.Add(Path.Combine(ModuleDirectory,"assimp" ,"bin", "libassimp.dylib"));
 
       // Ensure that the DLL is staged along with the executable
       RuntimeDependencies.Add(Path.Combine(ModuleDirectory,"assimp", "bin", "libassimp.5.dylib"));
@@ -105,31 +91,25 @@ public class UE_AssimpLibrary : ModuleRules
       string AssimpDylib = Path.Combine(ModuleDirectory, "assimp", "bin", "libassimp.dylib");
       string BinPath =Path.Combine(ModuleDirectory, BinaryFolder, "libassimp.dylib");
 
-     CopyFile(AssimpDylib,BinPath);
-			  // Ensure that the DLL is staged along with the executable
-		//	RuntimeDependencies.Add("$(PluginDir)/Binaries/ThirdParty/UE_AssimpLibrary/Win64/ExampleLibrary.dll");
-        }
-        else if (Target.Platform == UnrealTargetPlatform.Android)
-        {
-			PublicAdditionalLibraries.Add(Path.Combine(BinaryFolder, "arm64-v8a", "libassimp.so"));
-	}
-	else if (Target.Platform == UnrealTargetPlatform.Linux)
-        {
-			// Add the import library
-			PublicAdditionalLibraries.Add(Path.Combine(ModuleDirectory,"assimp" ,"bin", "libassimp.so"));
+      CopyFile(AssimpDylib, BinPath);
+    }
+    else if (Target.Platform == UnrealTargetPlatform.Linux)
+    {
+      // Add the import library
+      PublicAdditionalLibraries.Add(Path.Combine(ModuleDirectory,"assimp" ,"bin", "libassimp.so"));
 
       // Ensure that the DLL is staged along with the executable
       RuntimeDependencies.Add(Path.Combine(ModuleDirectory, "assimp", "bin", "libassimp.so.5"));
       AdjustSymlinks("so.5*");
 
-			Directory.CreateDirectory(BinaryFolder);
-			string AssimpSo = Path.Combine(ModuleDirectory, "assimp", "bin", "libassimp.so");
-			string BinPath = Path.Combine(ModuleDirectory, BinaryFolder, "libassimp.so");
-			
-		 	CopyFile(AssimpSo,BinPath);
-        }
-        }
-	
+      Directory.CreateDirectory(BinaryFolder);
+      string AssimpSo = Path.Combine(ModuleDirectory, "assimp", "bin", "libassimp.so");
+      string BinPath = Path.Combine(ModuleDirectory, BinaryFolder, "libassimp.so");
+
+      CopyFile(AssimpSo, BinPath);
+    }
+  }
+
 	public void CopyFile(string Source, string Dest)
 	{
 		System.Console.WriteLine("Copying {0} to {1}", Source, Dest);
